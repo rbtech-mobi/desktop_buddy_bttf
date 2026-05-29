@@ -100,7 +100,7 @@ static const char* TOPIC_TX_RESPONSE = "home/llm/response";
 static const char* TOPIC_TX_STATUS = "home/llm/status";
 static const char* DEVICE_ID = "DESKTOP-BUDDY-BTTF";
 
-// UI geometry
+// UI geometry and layout constants
 struct Rect {
   int x;
   int y;
@@ -115,10 +115,10 @@ struct UiButton {
   uint32_t pressedUntil;
 };
 
-// Hotspots para alternancia de tela.
-Rect clockFluxHotspot = {112, 386, 96, 82};    // Area ampliada do capacitor (sem mudar visual).
-Rect clockMsgIconHotspot = {282, 362, 24, 20}; // Envelope pequeno.
-Rect terminalClockHotspot = {94, 46, 132, 18}; // Area discreta no label superior.
+// Screen transition hotspots
+Rect clockFluxHotspot = {112, 386, 96, 82};    // Enlarged flux capacitor tap area
+Rect clockMsgIconHotspot = {282, 362, 24, 20}; // Small envelope icon
+Rect terminalClockHotspot = {94, 46, 132, 18}; // Discreet label tap area for terminal→clock
 
 Rect statusBar = {10, 10, 300, 24};
 Rect panelTop = {10, 40, 300, 330};
@@ -127,14 +127,14 @@ Rect panelBottom = {10, 376, 300, 76};
 Rect selectorBox = {20, 406, 174, 30};
 Rect sendBox = {204, 406, 96, 30};
 
-UiButton btnSend = {sendBox, "ENVIAR", false, 0};
+UiButton btnSend = {sendBox, "SEND", false, 0};
 
-// Ordem solicitada no seletor.
-static const char* ACTION_OPTIONS[] = {"REVERTA", "SIM", "NAO", "PARE"};
+// Action selector options (user can cycle through these with touch)
+static const char* ACTION_OPTIONS[] = {"UNDO", "YES", "NO", "STOP"};
 static const uint8_t ACTION_COUNT = 4;
 uint8_t selectedActionIndex = 0;
 
-// Palette
+// Color palette (RGB565 format) - initialized at startup
 uint16_t C_BG;
 uint16_t C_BG_DARK;
 uint16_t C_PANEL_METAL;
@@ -156,17 +156,17 @@ uint16_t C_CTRL_GRAY;
 uint16_t C_CTRL_GRAY_HI;
 uint16_t C_CTRL_GRAY_LO;
 
-// Runtime
+// Runtime configuration
 static const uint8_t SCREEN_BRIGHTNESS_ON = 255;
-static const unsigned long TOUCH_DEBOUNCE_MS = 180;
-static const unsigned long BUTTON_PRESS_MS = 120;
-static const uint8_t MAX_TERMINAL_LINES = 20;
+static const unsigned long TOUCH_DEBOUNCE_MS = 180;      // Milliseconds to ignore repeated touches
+static const unsigned long BUTTON_PRESS_MS = 120;        // Visual feedback duration
+static const uint8_t MAX_TERMINAL_LINES = 20;            // Scrolling message buffer size
 String terminalLines[MAX_TERMINAL_LINES];
 uint8_t terminalLineCount = 0;
 
 String lastAction = "NONE";
 String lastInboundSource = "SYS";
-String lastInboundPreview = "Aguardando dados do broker...";
+String lastInboundPreview = "Waiting for broker...";
 String lastRxSignature = "";
 unsigned long lastRxAt = 0;
 
@@ -179,6 +179,7 @@ unsigned long lastHeartbeatAt = 0;
 bool insecureFallbackEnabled = false;
 uint8_t mqttFailCount = 0;
 
+// Cached state for draw optimization (only redraw if changed)
 bool lastDrawWifi = false;
 bool lastDrawMqtt = false;
 int lastDrawRc = -999;
@@ -206,6 +207,7 @@ void pushTerminalLine(const String& line) {
 }
 
 void pushWrapped(const String& source, const String& message) {
+  // Wrap and push message to terminal: break at word boundaries or 40-char lines
   String full = "> " + source + ": " + sanitizeText(message);
   const int maxChars = 40;
 
@@ -215,7 +217,7 @@ void pushWrapped(const String& source, const String& message) {
     pushTerminalLine(full.substring(0, cut));
     full = full.substring(cut);
     full.trim();
-    if (full.length() > 0) full = "  " + full;
+    if (full.length() > 0) full = "  " + full;  // Indent continuation lines
   }
   pushTerminalLine(full);
 }
@@ -327,6 +329,7 @@ void drawStatusBar(bool force) {
   bool mqttOk = mqttClient.connected();
   int rc = lastMqttStateCode;
 
+  // Only redraw if state changed
   if (!force && wifiOk == lastDrawWifi && mqttOk == lastDrawMqtt && rc == lastDrawRc && mqttOk) return;
 
   lastDrawWifi = wifiOk;
@@ -340,7 +343,7 @@ void drawStatusBar(bool force) {
   tft.setTextColor(C_LED_YELLOW, C_BLACK_SOFT);
   tft.setCursor(statusBar.x + 8, statusBar.y + 8);
   tft.print("MQTT: ");
-  tft.print(mqttOk ? "CONECTADO" : "DESCONECTADO");
+  tft.print(mqttOk ? "CONNECTED" : "DISCONNECTED");
 
   tft.setTextColor(C_WHITE, C_BLACK_SOFT);
   tft.setCursor(statusBar.x + 174, statusBar.y + 8);
@@ -361,6 +364,7 @@ void drawRaisedControl(const Rect& r, uint16_t fill, uint16_t hi, uint16_t lo) {
 }
 
 void drawSelector(bool force) {
+  // Render action selector control with current selection and ">" indicator
   (void)force;
   drawRaisedControl(selectorBox, C_CTRL_GRAY, C_CTRL_GRAY_HI, C_CTRL_GRAY_LO);
   tft.setTextSize(2);
@@ -386,6 +390,7 @@ void drawUiButton(UiButton& b, uint16_t txt, uint16_t base, uint16_t hi, uint16_
 }
 
 void drawControlArea(bool force) {
+  // Render action selector and SEND button (bottom panel)
   if (force) {
     drawPanelFrame(panelBottom);
     drawLabelCentered(panelBottom.y + 6, panelBottom.w, "INPUT REQUIRED");
@@ -409,6 +414,7 @@ void drawClockMessageIcon() {
 }
 
 void drawLoadingDelorean(uint16_t frameMs) {
+  // Pixel-art transition animation with DeLorean sprite
   tft.fillScreen(tft.color565(16, 18, 24));
   const int scale = 2;
   const int offX = 0;
@@ -427,7 +433,7 @@ void drawLoadingDelorean(uint16_t frameMs) {
   tft.setTextSize(2);
   tft.setTextColor(C_WHITE, tft.color565(16, 18, 24));
   tft.setCursor(94, 364);
-  tft.print("CARREGANDO");
+  tft.print("LOADING");
 
   for (int i = 0; i < 3; i++) {
     tft.fillRect(236, 364, 24, 16, tft.color565(16, 18, 24));
@@ -440,6 +446,7 @@ void drawLoadingDelorean(uint16_t frameMs) {
 }
 
 void drawTerminalScreen() {
+  // Render complete terminal screen (main UI)
   drawMetalBackground();
   drawPanelFrame(panelTop);
   drawLabelCentered(panelTop.y + 6, panelTop.w, "LLM TRANSMISSION");
@@ -449,11 +456,13 @@ void drawTerminalScreen() {
 }
 
 void appendSystemLine(const String& source, const String& text) {
+  // Add line to terminal history and redraw if visible
   pushWrapped(source, text);
   if (currentScreen == STATE_TERMINAL) renderTerminalLines();
 }
 
 void publishDeviceStatus() {
+  // Publish device status heartbeat (retained, published every 45 sec or on action)
   if (!mqttClient.connected()) {
     pendingStatusPublish = true;
     return;
@@ -474,7 +483,7 @@ void publishDeviceStatus() {
   char buffer[420];
   size_t n = serializeJson(doc, buffer, sizeof(buffer));
   if (n > 0 && n < sizeof(buffer)) {
-    bool ok = mqttClient.publish(TOPIC_TX_STATUS, buffer, true);
+    bool ok = mqttClient.publish(TOPIC_TX_STATUS, buffer, true);  // retain=true
     pendingStatusPublish = !ok;
     if (ok) lastHeartbeatAt = millis();
   } else {
@@ -483,6 +492,7 @@ void publishDeviceStatus() {
 }
 
 void publishSelectedAction() {
+  // Publish user's selected action to MQTT response topic
   const char* action = ACTION_OPTIONS[selectedActionIndex];
   lastAction = action;
 
@@ -499,15 +509,17 @@ void publishSelectedAction() {
     ok = mqttClient.publish(TOPIC_TX_RESPONSE, buffer, false);
   }
 
-  String feedback = "Payload enviado: ";
+  String feedback = "Payload sent: ";
   feedback += action;
-  feedback += ok ? " (OK)" : " (PENDENTE)";
+  feedback += ok ? " (OK)" : " (PENDING)";
   appendSystemLine("ESP", feedback);
   publishDeviceStatus();
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // MQTT message handler: extract JSON fields with fallback to raw text
   String topicStr = topic;
+  // Ignore our own published messages (status/response)
   if (topicStr == TOPIC_TX_STATUS || topicStr == TOPIC_TX_RESPONSE) return;
 
   String raw;
@@ -518,29 +530,36 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String src = "SYS";
   String msg = raw;
 
+  // Try JSON parsing
   StaticJsonDocument<512> doc;
   DeserializationError err = deserializeJson(doc, payload, length);
   if (!err) {
+    // Ignore loopback messages (from this device)
     if (doc["device"].is<const char*>() && String((const char*)doc["device"]) == DEVICE_ID) return;
+    // Extract source (try multiple field names)
     if (doc["source"].is<const char*>()) src = (const char*)doc["source"];
     else if (doc["from"].is<const char*>()) src = (const char*)doc["from"];
     else if (doc["agent"].is<const char*>()) src = (const char*)doc["agent"];
 
+    // Extract message (try multiple field names)
     if (doc["message"].is<const char*>()) msg = (const char*)doc["message"];
     else if (doc["text"].is<const char*>()) msg = (const char*)doc["text"];
     else if (doc["prompt"].is<const char*>()) msg = (const char*)doc["prompt"];
     else if (doc["question"].is<const char*>()) msg = (const char*)doc["question"];
     else {
+      // Fallback: echo entire JSON as text
       String jsonEcho;
       serializeJson(doc, jsonEcho);
       msg = jsonEcho;
     }
   } else {
+    // JSON parse failed, infer source from topic name
     if (topicStr.indexOf("n8n") >= 0) src = "n8n";
     else if (topicStr.indexOf("llm") >= 0) src = "LLM";
   }
 
   msg = sanitizeText(msg);
+  // Deduplication: ignore same message within 1.5 seconds
   String sig = topicStr + "|" + src + "|" + msg;
   if (sig == lastRxSignature && millis() - lastRxAt < 1500) return;
   lastRxSignature = sig;
@@ -552,7 +571,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void connectWiFi() {
-  Serial.print("Conectando Wi-Fi");
+  // Attempt WiFi connection with timeout (~45 seconds)
+  Serial.print("Connecting WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   int guard = 0;
   while (WiFi.status() != WL_CONNECTED) {
@@ -564,12 +584,13 @@ void connectWiFi() {
   Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("Wi-Fi OK: ");
+    Serial.print("WiFi OK: ");
     Serial.println(WiFi.localIP());
   }
 }
 
 void syncNTP() {
+  // Sync system time from NTP (timezone: UTC-3)
   configTime(-3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 
   time_t now = time(nullptr);
@@ -583,6 +604,7 @@ void syncNTP() {
 }
 
 bool attemptMqttConnect() {
+  // Attempt MQTT connection; enable insecure mode after 3 failures
   if (WiFi.status() != WL_CONNECTED) return false;
 
   String clientId = "DesktopBuddyBTTF-";
@@ -601,6 +623,7 @@ bool attemptMqttConnect() {
   lastMqttStateCode = mqttClient.state();
   mqttFailCount++;
   if (!insecureFallbackEnabled && mqttFailCount >= 3) {
+    // Fallback: allow self-signed certificates
     espClient.setInsecure();
     insecureFallbackEnabled = true;
   }
@@ -614,8 +637,9 @@ void pressButton(UiButton& b) {
 }
 
 void handleTerminalTouch(uint16_t x, uint16_t y) {
-  // Alternancia sutil: toque na etiqueta superior do terminal para ir ao relogio.
+  // Terminal screen touch handler: selector rotation, send action, or transition to clock
   if (hitRect(terminalClockHotspot, x, y)) {
+    // Tap label to transition to clock screen
     currentScreen = STATE_CLOCK;
     clockPanel.begin();
     drawClockMessageIcon();
@@ -623,12 +647,14 @@ void handleTerminalTouch(uint16_t x, uint16_t y) {
   }
 
   if (hitRect(selectorBox, x, y)) {
+    // Tap selector to cycle through actions
     selectedActionIndex = (selectedActionIndex + 1) % ACTION_COUNT;
     drawControlArea(true);
     return;
   }
 
   if (hitRect(btnSend.r, x, y)) {
+    // Tap SEND button to publish selected action
     pressButton(btnSend);
     drawUiButton(btnSend, C_LED_YELLOW, C_CTRL_BLUE, C_CTRL_BLUE_HI, C_CTRL_BLUE_LO, true);
     publishSelectedAction();
@@ -637,14 +663,15 @@ void handleTerminalTouch(uint16_t x, uint16_t y) {
 }
 
 void handleClockTouch(uint16_t x, uint16_t y) {
-  // Botao de volta: clique no proprio capacitor de fluxo (ou no envelope indicador).
+  // Clock screen touch handler: back button or pass through to clock controls
   if (hitRect(clockFluxHotspot, x, y) || hitRect(clockMsgIconHotspot, x, y)) {
+    // Tap flux capacitor or envelope icon to return to terminal with animation
     drawLoadingDelorean(540);
     currentScreen = STATE_TERMINAL;
     drawTerminalScreen();
     return;
   }
-  // Qualquer outro toque permanece no relogio para nao quebrar os controles existentes.
+  // All other touches handled by clock panel (button/tag presses)
   clockPanel.handleButtonsAndTags(x, y);
 }
 
@@ -696,18 +723,22 @@ void setup() {
   Serial.begin(115200);
   randomSeed(micros());
 
+  // Initialize display (ST7796 parallel interface)
   tft.init();
-  tft.setRotation(0);  // Vertical 320x480
+  tft.setRotation(0);  // Vertical: 320×480
   tft.setBrightness(SCREEN_BRIGHTNESS_ON);
   tft.setTextWrap(false, false);
 
+  // Initialize UI
   initPalette();
-  pushTerminalLine("> SYS: Aguardando dados do broker...");
+  pushTerminalLine("> SYS: Waiting for broker...");
   drawTerminalScreen();
 
+  // Connect to network
   connectWiFi();
   syncNTP();
 
+  // Configure MQTT
   espClient.setCACert(MQTT_ROOT_CA);
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
@@ -718,19 +749,23 @@ void setup() {
 }
 
 void loop() {
+  // Main event loop: connections, input, rendering
   maintainConnections();
   handleTouch();
   refreshButtonRelease();
 
+  // Refresh status bar every 300ms (only if changed)
   if (currentScreen == STATE_TERMINAL && millis() - lastStatusRefreshAt > 300) {
     lastStatusRefreshAt = millis();
     drawStatusBar(false);
   }
 
+  // Heartbeat: publish status every 45 seconds
   if (mqttClient.connected() && millis() - lastHeartbeatAt > 45000) {
     pendingStatusPublish = true;
   }
 
+  // Clock screen animation updates
   if (currentScreen == STATE_CLOCK) {
     clockPanel.update();
     drawClockMessageIcon();

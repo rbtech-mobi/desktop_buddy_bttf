@@ -10,12 +10,13 @@ class TimeCircuitPanel {
   explicit TimeCircuitPanel(lgfx::LGFX_Device& lcd) : _lcd(lcd) {}
 
   void begin() {
+    // Initialize time circuit display: palette, layout, static elements, animation state
     initColors();
     setupLayout();
     drawStaticPanel();
     drawAllRows(true);
     drawFluxFrame();
-    drawControlButtons(); // redesenha por cima do frame do fluxo
+    drawControlButtons(); // Redraw on top of flux frame
     _lastClockSecond = 255;
     _lastFluxMs = millis();
   }
@@ -38,22 +39,24 @@ class TimeCircuitPanel {
 
  private:
   struct Row {
+    // Time circuit row: layout, LED color, caption, time values, cache for optimization
     int x;
     int y;
     int w;
     int h;
     uint16_t ledColor;
-    const char* caption;
+    const char* caption;       // "DESTINATION TIME", "LAST TIME DEPARTED", etc.
     int month;
     int day;
     int year;
     int hour;
     int minute;
-    bool dynamic;
-    char cached[32];
+    bool dynamic;              // If true, sync with system time (PRESENT TIME only)
+    char cached[32];           // Cached display string to minimize redraws
   };
 
   struct Tag {
+    // Interactive tap target for time row captions
     int x;
     int y;
     int w;
@@ -63,6 +66,7 @@ class TimeCircuitPanel {
   };
 
   struct SmallButton {
+    // Rocker button state (ON/OFF toggle)
     int x;
     int y;
     int w;
@@ -132,6 +136,7 @@ class TimeCircuitPanel {
   }
 
   void setupLayout() {
+    // Configure 4 time circuit rows and control buttons
     const int x = 10;
     const int w = 300;
     const int h = 82;
@@ -140,6 +145,7 @@ class TimeCircuitPanel {
     _rows[2] = {x, 194, w, h, 0xFD20, "SYNC POINT",         9, 21, 2010, 4, 29, false, ""};
     _rows[3] = {x, 282, w, h, 0x07E0, "PRESENT TIME",       0,  1, 2000, 7, 51, true,  ""};
 
+    // Setup interactive tap targets for row captions
     for (uint8_t i = 0; i < 4; i++) {
       _tags[i].x = _rows[i].x + 8;
       _tags[i].y = _rows[i].y + 56;
@@ -149,7 +155,7 @@ class TimeCircuitPanel {
       _tags[i].pressedUntil = 0;
     }
 
-    // botoes pequenos laterais do modulo de fluxo (sem texto).
+    // Side rocker buttons for flux capacitor and LED panel toggles (no text)
     _btnFlux = {62, 404, 28, 52, true};
     _btnPanel = {230, 404, 28, 52, true};
   }
@@ -218,17 +224,19 @@ class TimeCircuitPanel {
   }
 
   void drawRowFrame(uint8_t i) {
+    // Draw single time circuit row: 3D frame, brushed steel texture, LED display area, labels
     const Row& r = _rows[i];
     _lcd.fillRoundRect(r.x, r.y, r.w, r.h, 6, _cSteelB);
     _lcd.drawRoundRect(r.x, r.y, r.w, r.h, 6, _cBorder);
     _lcd.drawRoundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 6, _cPanel);
 
-    // Textura de aço escovado no corpo do row.
+    // Brushed steel texture: alternating horizontal lines
     for (int yy = r.y + 4; yy < r.y + r.h - 4; yy += 3) {
       uint16_t c = ((yy / 3) % 2) ? _lcd.color565(84, 88, 96) : _lcd.color565(98, 102, 110);
       _lcd.drawFastHLine(r.x + 4, yy, r.w - 8, c);
     }
 
+    // LED display area (empty box for digits)
     const int ledX = r.x + 8;
     const int ledY = r.y + 18;
     const int ledW = r.w - 16;
@@ -236,7 +244,7 @@ class TimeCircuitPanel {
     _lcd.fillRect(ledX, ledY, ledW, ledH, _cLedOff);
     _lcd.drawRect(ledX, ledY, ledW, ledH, _lcd.color565(44, 44, 50));
 
-    // Tags de cabecalho no estilo etiquetadora (vermelho + letra branca).
+    // Header labels in label-maker style (red background, white text)
     drawHeaderTag(r.x + 8,   r.y + 4, 56, "MONTH");
     drawHeaderTag(r.x + 68,  r.y + 4, 42, "DAY");
     drawHeaderTag(r.x + 114, r.y + 4, 56, "YEAR");
@@ -352,10 +360,12 @@ class TimeCircuitPanel {
   }
 
   void drawRowData(uint8_t i, int mon, int day, int year, int hh, int mm, bool force) {
+    // Render time values for row i: month name + 7-segment digit displays
+    // Uses cache to skip redundant redraws
     Row& r = _rows[i];
     char now[32];
     snprintf(now, sizeof(now), "%02d|%02d|%04d|%02d|%02d", mon, day, year, hh, mm);
-    if (!force && strcmp(now, r.cached) == 0) return;
+    if (!force && strcmp(now, r.cached) == 0) return;  // No change, skip redraw
     strncpy(r.cached, now, sizeof(r.cached) - 1);
     r.cached[sizeof(r.cached) - 1] = '\0';
 
@@ -365,12 +375,13 @@ class TimeCircuitPanel {
     const int ledH = 30;
     _lcd.fillRect(ledX, ledY, ledW, ledH, _cLedOff);
 
+    // LED brightness: full color if enabled, dimmed if disabled
     uint16_t ledOn = _panelLedsEnabled ? r.ledColor : scaleColor565(r.ledColor, 22);
     _lcd.setTextColor(ledOn, _cLedOff);
     _lcd.setTextSize(2);
     _lcd.setCursor(r.x + 12, r.y + 28);
     _lcd.print(monthName(mon));
-    // Digitos 7-seg com "rastro" (segmentos apagados visiveis)
+    // 7-segment digits with "ghost" (visible off segments for clarity)
     uint16_t ghost = dimColor565(ledOn, 5);
     drawSeg2(r.x + 84,  r.y + 24, day,  ledOn, ghost);
     drawSeg4(r.x + 124, r.y + 24, year, ledOn, ghost);
@@ -388,16 +399,17 @@ class TimeCircuitPanel {
   }
 
   void drawFluxFrame() {
+    // Draw flux module housing at bottom of display (contains animated capacitor)
     _lcd.fillRoundRect(10, 382, 300, 90, 8, _lcd.color565(42, 44, 50));
     _lcd.drawRoundRect(10, 382, 300, 90, 8, _cBorder);
-    // Um unico modulo de capacitor centralizado.
-    const int x = 130; // tamanho anterior (menor)
+    // Single centered flux capacitor module
+    const int x = 130;
     const int y = 398;
     const int w = 60;
     const int h = 62;
-    _lcd.fillRoundRect(x, y, w, h, 8, _lcd.color565(118, 122, 128));     // cinza externo
-    _lcd.drawRoundRect(x, y, w, h, 8, _cBlack);                           // contorno preto externo
-    _lcd.fillRoundRect(x + 4, y + 4, w - 8, h - 8, 6, _lcd.color565(90, 94, 100)); // cinza interno
+    _lcd.fillRoundRect(x, y, w, h, 8, _lcd.color565(118, 122, 128));     // Outer gray
+    _lcd.drawRoundRect(x, y, w, h, 8, _cBlack);                           // Black outline
+    _lcd.fillRoundRect(x + 4, y + 4, w - 8, h - 8, 6, _lcd.color565(90, 94, 100)); // Inner gray
     _lcd.drawRoundRect(x + 4, y + 4, w - 8, h - 8, 6, _lcd.color565(42, 44, 48));
   }
 
@@ -430,22 +442,24 @@ class TimeCircuitPanel {
   }
 
   void animateFluxIfNeeded() {
+    // Update flux capacitor animation: pulsing glow effect (on/off cycle with smooth ramping)
+    // Runs at ~21 Hz (48 ms per frame)
     const uint32_t now = millis();
     if (now - _lastFluxMs < 48) return;
     _lastFluxMs = now;
 
-    // Pulso intermitente unico: brilho sobe/desce, pausa e reinicia.
+    // Single pulsing cycle: brightness ramps up, down, then pauses before repeating
     const uint8_t kOnFrames = 20;
     const uint8_t kPauseFrames = 12;
     const uint8_t kCycle = kOnFrames + kPauseFrames;
     _fluxPhase = (_fluxPhase + 1) % kCycle;
 
     bool active = (_fluxPhase < kOnFrames);
-    uint8_t lum = 24; // base apagado
+    uint8_t lum = 24;  // Base dimmed state
     if (active) {
       uint8_t p = _fluxPhase;
-      if (p < 10) lum = (uint8_t)(80 + p * 17);      // sobe
-      else lum = (uint8_t)(250 - (p - 10) * 14);     // desce
+      if (p < 10) lum = (uint8_t)(80 + p * 17);      // Ramp up
+      else lum = (uint8_t)(250 - (p - 10) * 14);     // Ramp down
     }
 
     bool effectiveFlux = _panelLedsEnabled && _fluxEnabled;
@@ -457,38 +471,39 @@ class TimeCircuitPanel {
   }
 
   void drawFluxCell(int cx, int cy, uint8_t lum, bool active, uint16_t glow) {
-    // Limpa so a celula
+    // Render inverted-Y flux capacitor circuit with animated glow effect
+    // Clear the cell background
     _lcd.fillRect(cx - 26, cy - 27, 52, 54, _lcd.color565(90, 94, 100));
     _lcd.drawRect(cx - 26, cy - 27, 52, 54, _lcd.color565(42, 44, 48));
 
-    // Geometria do Y invertido
-    const int ax = cx - 15, ay = cy - 16;
-    const int bx = cx + 15, by = cy - 16;
-    const int dx = cx,      dy = cy + 18;
+    // Inverted-Y circuit geometry: two upper terminals + one lower terminal
+    const int ax = cx - 15, ay = cy - 16;  // Left terminal
+    const int bx = cx + 15, by = cy - 16;  // Right terminal
+    const int dx = cx,      dy = cy + 18;  // Bottom terminal
 
-    // Tubos metalicos sem preto interno.
+    // Metallic tubes (gray, no internal black outline)
     uint16_t tubeOuter = _lcd.color565(194, 198, 206);
     drawThickLine(cx, cy, ax, ay, tubeOuter, 4);
     drawThickLine(cx, cy, bx, by, tubeOuter, 4);
     drawThickLine(cx, cy, dx, dy, tubeOuter, 4);
 
-    // Bases com detalhe e ponto vermelho
+    // Terminal endpoints with red accent dots
     uint16_t baseGray = _lcd.color565(116, 118, 122);
     _lcd.fillCircle(ax, ay, 5, baseGray);
     _lcd.fillCircle(bx, by, 5, baseGray);
     _lcd.fillCircle(dx, dy, 5, baseGray);
-    _lcd.fillCircle(ax, ay, 2, 0xF800);
+    _lcd.fillCircle(ax, ay, 2, 0xF800);  // Red center
     _lcd.fillCircle(bx, by, 2, 0xF800);
     _lcd.fillCircle(dx, dy, 2, 0xF800);
 
-    // Pulso de energia claro e brilhante (intermitente)
+    // Energy pulse: bright blue glow effect (pulsing with animation)
     uint16_t arc = scaleColor565(_lcd.color565(190, 230, 255), lum);
     uint16_t coreGlow = scaleColor565(glow, lum);
     drawThickLine(cx, cy, ax, ay, arc, 2);
     drawThickLine(cx, cy, bx, by, arc, 2);
     drawThickLine(cx, cy, dx, dy, arc, 2);
 
-    // Pequenos estalos luminosos quando ativo
+    // Spark particles when active (active phase, high luminance)
     if (active && lum > 90) {
       _lcd.fillCircle((ax + cx) / 2, (ay + cy) / 2, 1, coreGlow);
       _lcd.fillCircle((bx + cx) / 2, (by + cy) / 2, 1, coreGlow);
@@ -497,12 +512,13 @@ class TimeCircuitPanel {
       _lcd.fillCircle(cx + 5, cy + 1, 1, coreGlow);
     }
 
-    // Nucleo com brilho intermitente
+    // Core nucleus with pulsing brightness
     uint16_t core = scaleColor565(_cWhite, (uint8_t)(40 + (lum * 3 / 4)));
     _lcd.fillCircle(cx, cy, 3, core);
   }
 
   void handleControlButtons(uint16_t x, uint16_t y) {
+    // Rocker button handlers: flux capacitor toggle and LED panel toggle
     if (hit(_btnFlux.x - 2, _btnFlux.y - 2, _btnFlux.w + 4, _btnFlux.h + 4, x, y)) {
       _fluxEnabled = !_fluxEnabled;
       _btnFlux.on = _fluxEnabled;
@@ -515,7 +531,7 @@ class TimeCircuitPanel {
       _btnPanel.on = _panelLedsEnabled;
       drawRockerButton(_btnPanel);
       drawAllRows(true);
-      // refresh visual imediato do fluxo conforme estado global
+      // Immediately refresh flux visual based on combined state
       bool eff = _panelLedsEnabled && _fluxEnabled;
       drawFluxCell(160, 429, eff ? 120 : 16, eff, _cWhite);
     }
