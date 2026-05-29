@@ -8,7 +8,65 @@ Desktop Buddy BTTF is a **real-time embedded messaging appliance** that bridges 
 
 ---
 
-## State Machine
+## WiFi Dual-Network Failover State Machine
+
+The device automatically switches between primary and secondary WiFi networks:
+
+```
+┌──────────────────────────┐
+│  Boot: Try Primary       │
+│  (15 sec timeout)        │
+└────┬─────────────────────┘
+     │
+     ├─ SUCCESS ──────────┐
+     │                    │
+     └─ FAIL              ▼
+        (try 15s)    ┌──────────────────┐
+        │            │ WIFI_PRIMARY     │
+        │            │ (actively use)   │
+        │            │ (check every 30s)│
+        │            └──────────────────┘
+        │                    │
+        └────────┬───────────┤ Primary unavailable
+                 │           │
+                 ▼           ▼
+        ┌──────────────────────────┐
+        │ Try Secondary            │
+        │ (15 sec timeout)         │
+        └────┬─────────────────────┘
+             │
+             ├─ SUCCESS ────────────┐
+             │                      │
+             └─ FAIL                ▼
+                (try 15s)      ┌──────────────────┐
+                │              │ WIFI_SECONDARY   │
+                │              │ (in use)         │
+                │              │ (check primary   │
+                │              │  every 30 sec)   │
+                │              └────┬─────────────┘
+                │                   │
+                │      Primary      │
+                │      returns      │
+                │                   ▼
+                │          ┌──────────────────────┐
+                │          │ Switch to Primary    │
+                │          │ (re-auth, reconnect) │
+                │          └──────┬───────────────┘
+                │                 │
+                │                 ▼
+                │        ┌──────────────────┐
+                │        │ WIFI_PRIMARY     │
+                │        │ (back to default)│
+                │        └──────────────────┘
+                │
+                └────► WIFI_DISCONNECTED
+                       (retry both networks
+                        every 3 seconds)
+```
+
+---
+
+## Screen State Machine
 
 The device cycles between two exclusive screen states:
 

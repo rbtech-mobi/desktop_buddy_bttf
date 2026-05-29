@@ -20,6 +20,10 @@ static const char* PROJECT_NAME = "Desktop Buddy BTTF";
 enum ScreenState { STATE_TERMINAL, STATE_CLOCK };
 ScreenState currentScreen = STATE_TERMINAL;
 
+enum WiFiMode { WIFI_DISCONNECTED, WIFI_PRIMARY, WIFI_SECONDARY };
+WiFiMode currentWiFiMode = WIFI_DISCONNECTED;
+unsigned long lastPrimaryRetryAt = 0;
+
 class LGFX : public lgfx::LGFX_Device {
   lgfx::Panel_ST7796 _panel_instance;
   lgfx::Bus_Parallel8 _bus_instance;
@@ -345,10 +349,22 @@ void drawStatusBar(bool force) {
   tft.print("MQTT: ");
   tft.print(mqttOk ? "CONNECTED" : "DISCONNECTED");
 
+  // Show WiFi status with PRIMARY/SECONDARY indicator
   tft.setTextColor(C_WHITE, C_BLACK_SOFT);
   tft.setCursor(statusBar.x + 174, statusBar.y + 8);
   tft.print("NET:");
-  tft.print(wifiOk ? "OK" : "OFF");
+  if (currentWiFiMode == WIFI_PRIMARY) {
+    tft.setTextColor(C_LED_GREEN, C_BLACK_SOFT);  // Green for primary
+    tft.print("PRIMARY");
+  } else if (currentWiFiMode == WIFI_SECONDARY) {
+    tft.setTextColor(C_LED_YELLOW, C_BLACK_SOFT);  // Amber for secondary
+    tft.print("SECOND");
+  } else {
+    tft.setTextColor(C_LED_RED, C_BLACK_SOFT);    // Red for disconnected
+    tft.print("OFF");
+  }
+
+  tft.setTextColor(C_WHITE, C_BLACK_SOFT);
   tft.setCursor(statusBar.x + 230, statusBar.y + 8);
   tft.print("rc:");
   tft.print(rc);
@@ -570,22 +586,79 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   appendSystemLine(src, msg);
 }
 
-void connectWiFi() {
-  // Attempt WiFi connection with timeout (~45 seconds)
-  Serial.print("Connecting WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  int guard = 0;
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+bool connectWiFiNetwork(const char* ssid, const char* password, unsigned long timeout) {
+  // Try to connect to a single WiFi network with timeout
+  if (ssid == nullptr || ssid[0] == '\0') return false;  // Skip if SSID is empty
+  Serial.printf("Trying WiFi: %s\n", ssid);
+  WiFi.begin(ssid, password);
+
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeout) {
+    delay(250);
     Serial.print(".");
-    guard++;
-    if (guard > 90) break;
   }
   Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("WiFi OK: ");
-    Serial.println(WiFi.localIP());
+    Serial.printf("WiFi OK on %s: %s\n", ssid, WiFi.localIP().toString().c_str());
+    return true;
+  }
+  Serial.println("WiFi failed.");
+  return false;
+}
+
+void connectWiFiDualNetwork() {
+  // Try primary, then secondary. Prefer primary but use secondary as fallback.
+  Serial.println("\n--- WiFi Failover ---");
+
+  // Try primary first
+  if (connectWiFiNetwork(WIFI_SSID_PRIMARY, WIFI_PASS_PRIMARY, WIFI_CONNECT_TIMEOUT_MS)) {
+    currentWiFiMode = WIFI_PRIMARY;
+    lastPrimaryRetryAt = millis();
+    return;
+  }
+
+  // Primary failed, try secondary
+  if (connectWiFiNetwork(WIFI_SSID_SECONDARY, WIFI_PASS_SECONDARY, WIFI_CONNECT_TIMEOUT_MS)) {
+    currentWiFiMode = WIFI_SECONDARY;
+    Serial.println("-> Using secondary WiFi network");
+    lastPrimaryRetryAt = millis();
+    return;
+  }
+
+  // Both failed
+  currentWiFiMode = WIFI_DISCONNECTED;
+  Serial.println("-> All WiFi networks unavailable");
+}
+
+void checkPrimaryWiFi() {
+  // If on secondary, periodically check if primary is back online
+  if (currentWiFiMode != WIFI_SECONDARY) return;
+  if (millis() - lastPrimaryRetryAt < WIFI_PRIMARY_RETRY_MS) return;
+
+  lastPrimaryRetryAt = millis();
+
+  // Do a quick scan to see if primary SSID is available
+  Serial.println("Checking if primary WiFi is back...");
+  int networks = WiFi.scanNetworks();
+
+  bool primaryFound = false;
+  for (int i = 0; i < networks; i++) {
+    if (strcmp(WiFi.SSID(i).c_str(), WIFI_SSID_PRIMARY) == 0) {
+      primaryFound = true;
+      Serial.printf("Primary SSID '%s' detected!\n", WIFI_SSID_PRIMARY);
+      break;
+    }
+  }
+
+  if (primaryFound) {
+    // Try to switch back to primary
+    Serial.println("Attempting to switch to primary WiFi...");
+    WiFi.disconnect();
+    if (connectWiFiNetwork(WIFI_SSID_PRIMARY, WIFI_PASS_PRIMARY, WIFI_CONNECT_TIMEOUT_MS)) {
+      currentWiFiMode = WIFI_PRIMARY;
+      Serial.println("-> Switched back to primary WiFi!");
+    }
   }
 }
 
@@ -701,12 +774,22 @@ void refreshButtonRelease() {
 }
 
 void maintainConnections() {
+  // Handle WiFi with dual-network failover
   if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-    drawStatusBar(true);
+    if (millis() - lastMqttAttemptAt > 3000) {
+      lastMqttAttemptAt = millis();
+      connectWiFiDualNetwork();
+      drawStatusBar(true);
+    }
     return;
   }
 
+  // If on secondary WiFi, periodically check if primary is back online
+  if (currentWiFiMode == WIFI_SECONDARY) {
+    checkPrimaryWiFi();
+  }
+
+  // Handle MQTT connection and messages
   if (!mqttClient.connected()) {
     if (millis() - lastMqttAttemptAt > 3000) {
       lastMqttAttemptAt = millis();
@@ -734,8 +817,8 @@ void setup() {
   pushTerminalLine("> SYS: Waiting for broker...");
   drawTerminalScreen();
 
-  // Connect to network
-  connectWiFi();
+  // Connect to network (with failover to secondary if available)
+  connectWiFiDualNetwork();
   syncNTP();
 
   // Configure MQTT

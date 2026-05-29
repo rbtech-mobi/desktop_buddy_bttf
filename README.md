@@ -75,9 +75,19 @@ Copy `secrets.example.h` → `secrets.h` and fill in your credentials:
 #ifndef SECRETS_H
 #define SECRETS_H
 
-// WiFi
-const char* WIFI_SSID = "your-network-name";
-const char* WIFI_PASS = "your-network-password";
+// WiFi Configuration: Dual Network with Automatic Failover
+// Primary: preferred network (e.g., home WiFi, 5 GHz)
+const char* WIFI_SSID_PRIMARY = "your-primary-network";
+const char* WIFI_PASS_PRIMARY = "your-primary-password";
+
+// Secondary: fallback network (e.g., guest WiFi, 2.4 GHz, mobile hotspot)
+// Leave as "" if you don't have a secondary network
+const char* WIFI_SSID_SECONDARY = "your-secondary-network";
+const char* WIFI_PASS_SECONDARY = "your-secondary-password";
+
+// WiFi Failover Timings
+const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;  // Timeout per attempt
+const unsigned long WIFI_PRIMARY_RETRY_MS = 30000;    // Check primary every 30 sec
 
 // MQTT Broker (TLS)
 const char* MQTT_HOST = "your-broker-hostname.example.com";
@@ -182,6 +192,38 @@ You should see the message appear in the **Terminal** screen on the device.
   "uptime_s": 3600
 }
 ```
+
+## Dual Network Failover
+
+The device automatically switches between primary and secondary WiFi networks:
+
+```
+┌─────────────────────┐
+│  Primary WiFi       │  ◄─── Preferred (5 GHz, home network)
+│  (e.g., home AP)    │
+└─────────────────────┘
+         │
+         ├─ Connected ──► Use primary
+         │
+         └─ Unavailable ──┐
+                          ▼
+                  ┌─────────────────────┐
+                  │  Secondary WiFi     │  ◄─── Fallback (2.4 GHz, guest)
+                  │  (e.g., guest AP)   │
+                  └─────────────────────┘
+                          │
+                          └─ Used until primary returns
+                                    │
+                  ┌─────────────────┴──────────────┐
+                  │  Primary detected (every 30s)  │
+                  └─────────────────┬──────────────┘
+                                    │
+                                    └─► Switch back to primary
+```
+
+**Status bar shows**: `NET: PRIMARY` (green) / `NET: SECOND` (amber) / `NET: OFF` (red)
+
+If you only have one WiFi network, leave `WIFI_SSID_SECONDARY = ""` and the device will just use the primary network.
 
 ## Message Flow
 
