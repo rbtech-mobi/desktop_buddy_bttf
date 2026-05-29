@@ -6,13 +6,14 @@ This project receives real-time messages via MQTT broker, displays them in a ter
 
 ## Features at a Glance
 
-- 📨 **Real-time MQTT messaging**: Receive inbound messages and display in terminal
-- 🎨 **Dual-screen UI**: Terminal for messaging, "time circuit" clock for idle state
-- 🔘 **Touch-responsive controls**: Select actions, send responses, toggle LED displays
-- ⚡ **Smooth transitions**: Pixel-art loading animation between screen modes
-- 📊 **Device status tracking**: Publish device state, WiFi/MQTT health, and user actions
-- 🔐 **Secure TLS**: Configured for secure MQTT brokers with certificate validation
-- 🎬 **Custom graphics**: 7-segment displays, animated flux capacitor, brushed steel UI theme
+- Real-time MQTT messaging: Receive inbound messages and display in terminal
+- Dual-screen UI: Terminal for messaging, "time circuit" clock for idle state
+- Touch-responsive controls: Select actions, send responses, toggle LED displays
+- Smooth transitions: Pixel-art loading animation between screen modes
+- Device status tracking: Publish device state, WiFi/MQTT health, and user actions
+- Secure MQTTS (TLS): Configured for secure MQTT brokers with certificate validation
+- Custom graphics: 7-segment displays, animated flux capacitor, brushed steel UI theme
+- Dual WiFi failover: Automatic switch between primary and secondary networks
 
 ## Architecture
 
@@ -38,9 +39,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed state diagram and message fl
 | Layer | Component | Role |
 |-------|-----------|------|
 | **Graphics** | [LovyanGFX](https://github.com/lovyan03/LovyanGFX) | Fast, low-level LCD driver abstraction |
-| **Messaging** | [PubSubClient](https://github.com/knolleary/pubsubclient) | MQTT 3.1.1 client with TLS support |
+| **Messaging** | [PubSubClient](https://github.com/knolleary/pubsubclient) | MQTT 3.1.1 client with MQTTS/TLS support |
 | **Serialization** | [ArduinoJson](https://arduinojson.org/) | Lightweight JSON parsing (statically allocated) |
 | **MCU** | ESP32-S3 IDF (Arduino core) | FreeRTOS, WiFi stack, NTP/TLS |
+| **Cloud MQTT Broker** | [HiveMQ Cloud](https://www.hivemq.cloud/) | Secure MQTTS (port 8883), retained messages, managed infrastructure |
 
 ## Project Structure
 
@@ -192,6 +194,16 @@ You should see the message appear in the **Terminal** screen on the device.
   "uptime_s": 3600
 }
 ```
+
+## Cloud MQTT Broker: HiveMQ Cloud
+
+This project is configured for HiveMQ Cloud:
+- MQTTS protocol (TLS/SSL encryption on port 8883)
+- Retained messages for persistent device status
+- Automatic reconnection with exponential backoff
+- CA certificate validation for secure TLS handshake
+
+Get started: Sign up at https://www.hivemq.cloud/
 
 ## Dual Network Failover
 
