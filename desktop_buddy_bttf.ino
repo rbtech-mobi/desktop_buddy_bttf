@@ -589,6 +589,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 bool connectWiFiNetwork(const char* ssid, const char* password, unsigned long timeout) {
   // Try to connect to a single WiFi network with timeout
   if (ssid == nullptr || ssid[0] == '\0') return false;  // Skip if SSID is empty
+
+  // Disconnect first to clear any previous connection state
+  WiFi.disconnect(true);  // true = turn off WiFi
+  delay(500);  // Wait for clean state
+
   Serial.printf("Trying WiFi: %s\n", ssid);
   WiFi.begin(ssid, password);
 
