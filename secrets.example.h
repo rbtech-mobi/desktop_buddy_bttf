@@ -7,7 +7,7 @@
 // The device will try PRIMARY network first. If unavailable, it automatically
 // switches to SECONDARY. If primary comes back online, device switches back.
 // Example use cases:
-//   - Primary: 5 GHz band (speed), Secondary: 2.4 GHz band (range)
+//   - Primary: Main network (2.4 GHz), Secondary: Guest/Backup (2.4 GHz)
 //   - Primary: Office WiFi, Secondary: Mobile hotspot fallback
 
 // Primary WiFi Network (preferred)

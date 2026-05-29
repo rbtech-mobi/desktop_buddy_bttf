@@ -76,7 +76,7 @@ Copy `secrets.example.h` → `secrets.h` and fill in your credentials:
 #define SECRETS_H
 
 // WiFi Configuration: Dual Network with Automatic Failover
-// Primary: preferred network (e.g., home WiFi, 5 GHz)
+// Primary: preferred network (e.g., main home WiFi, 2.4 GHz)
 const char* WIFI_SSID_PRIMARY = "your-primary-network";
 const char* WIFI_PASS_PRIMARY = "your-primary-password";
 
@@ -199,7 +199,7 @@ The device automatically switches between primary and secondary WiFi networks:
 
 ```
 ┌─────────────────────┐
-│  Primary WiFi       │  ◄─── Preferred (5 GHz, home network)
+│  Primary WiFi       │  ◄─── Preferred (2.4 GHz, home network)
 │  (e.g., home AP)    │
 └─────────────────────┘
          │
