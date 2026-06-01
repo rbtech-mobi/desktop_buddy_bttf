@@ -1,10 +1,67 @@
-# Architecture: Desktop Buddy BTTF
+# LifeOS: Architecture & Technical Deep Dive
 
-## System Overview
+> **Circuitos do Tempo (Time Circuits)** — A fusion of 1980s DeLorean nostalgia with modern IoT/AI infrastructure.
 
-Desktop Buddy BTTF is a **real-time embedded messaging appliance** that bridges MQTT brokers and physical interaction. The system runs on ESP32-S3 (dual-core, 8 MB PSRAM) and drives a 3.5" capacitive touchscreen. It operates as a **state machine** with two screens (terminal and clock) and publishes device status at regular intervals.
+---
 
-**Design philosophy**: Minimize latency between message receipt and display; enable operator feedback via touch; maintain clean separation between networking, rendering, and UI layers.
+## 🏗️ System Architecture Overview
+
+### High-Level Message Flow
+
+```mermaid
+graph LR
+    A["📧 Email Inbox<br/>(Gmail API)"] -->|triggers| B["🌐 Hostinger<br/>n8n + Node.js"]
+    C["📱 Monday.com<br/>(REST API)"] -->|reads tasks| B
+    D["💬 Telegram Bot<br/>(Optional)"] -->|sends messages| B
+    
+    B -->|processes| E["🧠 LLM API<br/>(Gemini/Nvidia NIM)"]
+    E -->|generates response| B
+    
+    B -->|publishes| F["☁️ HiveMQ Cloud<br/>(MQTT Broker TLS/8883)"]
+    
+    F -->|subscribes| G["🎮 ESP32<br/>(WT32-SC01 Plus)"]
+    G -->|renders| H["📺 DeLorean UI<br/>(320x480 Display)"]
+    
+    G -->|publishes responses| F
+    F -->|triggers actions| B
+    
+    style A fill:#ff6b6b
+    style B fill:#4ecdc4
+    style E fill:#95e1d3
+    style F fill:#ffd93d
+    style G fill:#6bcf7f
+    style H fill:#a8dadc
+```
+
+---
+
+## 🔄 Component Architecture (Detailed)
+
+### **Layer 1: External Data Sources**
+```
+┌─────────────────────────────────────────────────────┐
+│           EXTERNAL INTEGRATIONS                     │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  📧 Gmail API              💼 Monday.com API       │
+│  ├─ OAuth2 Authentication  ├─ Task Reading        │
+│  ├─ IMAP Message Parsing   ├─ Board Updates       │
+│  └─ Label Filtering        └─ Status Sync         │
+│                                                     │
+│  💬 Telegram Bot (Optional)                        │
+│  ├─ Message Webhooks                              │
+│  ├─ Command Processing                            │
+│  └─ User Interactions                              │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+**Technical Details:**
+- **Email Protocol:** IMAP with TLS encryption (port 993)
+- **OAuth2 Flow:** Refresh tokens stored securely in Hostinger environment
+- **Message Parsing:** Full text extraction + attachment metadata
+- **Monday.com:** REST API v2 with GraphQL option for complex queries
+- **Telegram:** Webhook mode (no polling required)
 
 ---
 
