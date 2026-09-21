@@ -24,7 +24,6 @@ This is a **real-time embedded system** showcasing:
 - **Graphics optimization** (efficient 7-segment rendering, animation frame throttling)
 - **Professional error handling** (WiFi reconnection, MQTT fallback modes, message deduplication)
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed state diagram and message flow.
 
 ## Hardware
 
