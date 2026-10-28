@@ -444,57 +444,50 @@ class TimeCircuitPanel {
     _lcd.fillRect(cx - offset, cy - offset, size, size, color);
   }
 
+  void drawFluxBeam(int x1, int y1, int x2, int y2, uint16_t color, uint8_t width) {
+    // Parallel raster lines make one continuous, deliberately pixelated tube.
+    const int dx = abs(x2 - x1);
+    const int dy = abs(y2 - y1);
+    const int first = -(int)(width / 2);
+    const int last = first + width - 1;
+    if (dx >= dy) {
+      for (int offset = first; offset <= last; offset++) {
+        _lcd.drawLine(x1, y1 + offset, x2, y2 + offset, color);
+      }
+    } else {
+      for (int offset = first; offset <= last; offset++) {
+        _lcd.drawLine(x1 + offset, y1, x2 + offset, y2, color);
+      }
+    }
+  }
+
   void drawFluxCell(int cx, int cy, uint8_t phase, bool enabled) {
     // Pixel-art Flux Capacitor: three stepped tubes converge on one bright core.
-    const uint16_t cavity = _lcd.color565(22, 26, 34);
-    const uint16_t cavityEdge = _lcd.color565(10, 12, 18);
-    const uint16_t steel = _lcd.color565(128, 138, 150);
-    const uint16_t steelHi = _lcd.color565(194, 204, 214);
-    const uint16_t tubeDark = _lcd.color565(5, 12, 22);
-    const uint16_t tubeBase = _lcd.color565(30, 88, 116);
-    const uint16_t tubeLit = _lcd.color565(116, 210, 238);
-    const uint16_t pulseHalo = _lcd.color565(60, 196, 238);
-    const uint16_t pulseCore = _lcd.color565(238, 252, 255);
+    const uint16_t cavity = _lcd.color565(8, 13, 21);
+    const uint16_t cavityEdge = _lcd.color565(4, 7, 12);
+    const uint16_t steel = _lcd.color565(92, 62, 42);
+    const uint16_t steelHi = _lcd.color565(237, 190, 124);
+    const uint16_t tubeDark = _lcd.color565(24, 10, 6);
+    const uint16_t tubeBase = _lcd.color565(172, 73, 24);
+    const uint16_t tubeLit = _lcd.color565(255, 231, 183);
+    const uint16_t pulseHalo = _lcd.color565(255, 153, 46);
+    const uint16_t pulseCore = _lcd.color565(255, 248, 224);
 
     // Recessed, squared-off window inside the existing 60 x 62 housing.
     _lcd.fillRect(cx - 26, cy - 27, 52, 54, _lcd.color565(90, 94, 100));
     _lcd.drawRect(cx - 26, cy - 27, 52, 54, _lcd.color565(42, 44, 48));
     _lcd.fillRect(cx - 23, cy - 24, 46, 48, cavity);
     _lcd.drawRect(cx - 23, cy - 24, 46, 48, cavityEdge);
-    _lcd.drawFastHLine(cx - 21, cy - 22, 42, _lcd.color565(42, 52, 64));
 
-    // Hand-stepped paths create a deliberate pixel-art silhouette.
-    const int8_t pathX[3][6] = {
-      {-15, -12,  -9,  -6,  -3, 0},
-      { 15,  12,   9,   6,   3, 0},
-      {  0,   0,   0,   0,   0, 0}
-    };
-    const int8_t pathY[3][6] = {
-      {-16, -13, -10,  -7,  -3, 0},
-      {-16, -13, -10,  -7,  -3, 0},
-      { 18,  14,  10,   6,   3, 0}
-    };
+    const int tipX[3] = {cx - 15, cx + 15, cx};
+    const int tipY[3] = {cy - 16, cy - 16, cy + 18};
 
-    // Dark outline, steel sleeve and narrow blue-white strip define each tube.
+    // Three continuous stepped tubes converge on the center hub.
     for (uint8_t arm = 0; arm < 3; arm++) {
-      for (uint8_t point = 0; point < 6; point++) {
-        const int px = cx + pathX[arm][point];
-        const int py = cy + pathY[arm][point];
-        drawFluxPixel(px, py, 8, tubeDark);
-        drawFluxPixel(px, py, 6, steel);
-        drawFluxPixel(px, py, 4, tubeBase);
-        if (enabled) drawFluxPixel(px, py, 2, tubeLit);
-      }
-    }
-
-    // Red terminal caps stay visible while the tubes are idle.
-    for (uint8_t arm = 0; arm < 3; arm++) {
-      const int tx = cx + pathX[arm][0];
-      const int ty = cy + pathY[arm][0];
-      drawFluxPixel(tx, ty, 12, tubeDark);
-      drawFluxPixel(tx, ty, 10, steel);
-      drawFluxPixel(tx, ty, 6, _lcd.color565(112, 12, 18));
-      drawFluxPixel(tx, ty, 2, _lcd.color565(255, 72, 68));
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeDark, 8);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, steel, 6);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeBase, 4);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, enabled ? tubeLit : steelHi, 2);
     }
 
     // One arm at a time carries a bright pixel pulse from its terminal to the hub.
@@ -505,25 +498,32 @@ class TimeCircuitPanel {
       const uint8_t armOffset[3] = {0, 13, 26};
       for (uint8_t arm = 0; arm < 3; arm++) {
         const uint8_t armFrame = (phase + armOffset[arm]) % kCycleFrames;
-        int8_t point = -1;
+        int px = cx;
+        int py = cy;
         if (armFrame < kTravelFrames) {
-          point = (armFrame * 5) / (kTravelFrames - 1);
-        } else if (armFrame < kTravelFrames + kCoreHoldFrames) {
-          point = 5;
+          px = tipX[arm] + ((cx - tipX[arm]) * armFrame) / (kTravelFrames - 1);
+          py = tipY[arm] + ((cy - tipY[arm]) * armFrame) / (kTravelFrames - 1);
+        } else if (armFrame >= kTravelFrames + kCoreHoldFrames) {
+          continue;
         }
 
-        if (point >= 0) {
-          const int px = cx + pathX[arm][point];
-          const int py = cy + pathY[arm][point];
-          drawFluxPixel(px, py, 6, pulseHalo);
-          drawFluxPixel(px, py, 3, pulseCore);
-          if (point > 0) {
-            const int trailX = cx + pathX[arm][point - 1];
-            const int trailY = cy + pathY[arm][point - 1];
-            drawFluxPixel(trailX, trailY, 3, pulseHalo);
-          }
+        drawFluxPixel(px, py, 4, pulseHalo);
+        drawFluxPixel(px, py, 2, pulseCore);
+        if (armFrame > 3 && armFrame < kTravelFrames) {
+          const uint8_t trailFrame = armFrame - 3;
+          const int trailX = tipX[arm] + ((cx - tipX[arm]) * trailFrame) / (kTravelFrames - 1);
+          const int trailY = tipY[arm] + ((cy - tipY[arm]) * trailFrame) / (kTravelFrames - 1);
+          drawFluxPixel(trailX, trailY, 2, pulseHalo);
         }
       }
+    }
+
+    // Red terminal caps stay visible while the tubes are idle or energized.
+    for (uint8_t arm = 0; arm < 3; arm++) {
+      drawFluxPixel(tipX[arm], tipY[arm], 10, tubeDark);
+      drawFluxPixel(tipX[arm], tipY[arm], 8, steel);
+      drawFluxPixel(tipX[arm], tipY[arm], 6, _lcd.color565(112, 12, 18));
+      drawFluxPixel(tipX[arm], tipY[arm], 2, _lcd.color565(255, 72, 68));
     }
 
     // The squared hub gives the three arms a distinct point of convergence.
