@@ -411,6 +411,7 @@ class TimeCircuitPanel {
     _lcd.drawRoundRect(x, y, w, h, 8, _cBlack);                           // Black outline
     _lcd.fillRoundRect(x + 4, y + 4, w - 8, h - 8, 6, _lcd.color565(90, 94, 100)); // Inner gray
     _lcd.drawRoundRect(x + 4, y + 4, w - 8, h - 8, 6, _lcd.color565(42, 44, 48));
+    drawFluxCell(160, 429, _fluxPhase, _panelLedsEnabled && _fluxEnabled);
   }
 
   uint16_t scaleColor565(uint16_t c, uint8_t level255) {
@@ -423,98 +424,113 @@ class TimeCircuitPanel {
     return (uint16_t)((r << 11) | (g << 5) | b);
   }
 
-  void drawThickLine(int x1, int y1, int x2, int y2, uint16_t color, uint8_t thick) {
-    int dx = x2 - x1;
-    int dy = y2 - y1;
-    if (abs(dx) > abs(dy)) {
-      int half = thick / 2;
-      for (int o = -half; o <= half; o++) _lcd.drawLine(x1, y1 + o, x2, y2 + o, color);
-    } else if (abs(dy) > abs(dx)) {
-      int half = thick / 2;
-      for (int o = -half; o <= half; o++) _lcd.drawLine(x1 + o, y1, x2 + o, y2, color);
-    } else {
-      int half = thick / 2;
-      for (int o = -half; o <= half; o++) {
-        _lcd.drawLine(x1 + o, y1, x2 + o, y2, color);
-        _lcd.drawLine(x1, y1 + o, x2, y2 + o, color);
-      }
-    }
-  }
-
   void animateFluxIfNeeded() {
-    // Update flux capacitor animation: pulsing glow effect (on/off cycle with smooth ramping)
-    // Runs at ~21 Hz (48 ms per frame)
+    // Move one bright pixel pulse along each arm, staggered toward the core.
+    // Runs at ~21 Hz (48 ms per frame).
     const uint32_t now = millis();
     if (now - _lastFluxMs < 48) return;
     _lastFluxMs = now;
 
-    // Single pulsing cycle: brightness ramps up, down, then pauses before repeating
-    const uint8_t kOnFrames = 20;
-    const uint8_t kPauseFrames = 12;
-    const uint8_t kCycle = kOnFrames + kPauseFrames;
-    _fluxPhase = (_fluxPhase + 1) % kCycle;
-
-    bool active = (_fluxPhase < kOnFrames);
-    uint8_t lum = 24;  // Base dimmed state
-    if (active) {
-      uint8_t p = _fluxPhase;
-      if (p < 10) lum = (uint8_t)(80 + p * 17);      // Ramp up
-      else lum = (uint8_t)(250 - (p - 10) * 14);     // Ramp down
-    }
-
-    bool effectiveFlux = _panelLedsEnabled && _fluxEnabled;
-    if (!effectiveFlux) {
-      drawFluxCell(160, 429, 16, false, _cWhite);
-      return;
-    }
-    drawFluxCell(160, 429, lum, active, _cWhite);
+    const bool effectiveFlux = _panelLedsEnabled && _fluxEnabled;
+    const uint8_t kCycleFrames = 40;
+    if (effectiveFlux) _fluxPhase = (_fluxPhase + 1) % kCycleFrames;
+    else _fluxPhase = 0;
+    drawFluxCell(160, 429, _fluxPhase, effectiveFlux);
   }
 
-  void drawFluxCell(int cx, int cy, uint8_t lum, bool active, uint16_t glow) {
-    // Render inverted-Y flux capacitor circuit with animated glow effect
-    // Clear the cell background
+  void drawFluxPixel(int cx, int cy, uint8_t size, uint16_t color) {
+    // Square blocks keep the small graphic crisp instead of smoothing its edges.
+    const int offset = size / 2;
+    _lcd.fillRect(cx - offset, cy - offset, size, size, color);
+  }
+
+  void drawFluxCell(int cx, int cy, uint8_t phase, bool enabled) {
+    // Pixel-art Flux Capacitor: three stepped tubes converge on one bright core.
+    const uint16_t cavity = _lcd.color565(22, 26, 34);
+    const uint16_t cavityEdge = _lcd.color565(10, 12, 18);
+    const uint16_t steel = _lcd.color565(128, 138, 150);
+    const uint16_t steelHi = _lcd.color565(194, 204, 214);
+    const uint16_t tubeDark = _lcd.color565(5, 12, 22);
+    const uint16_t tubeBase = _lcd.color565(30, 88, 116);
+    const uint16_t tubeLit = _lcd.color565(116, 210, 238);
+    const uint16_t pulseHalo = _lcd.color565(60, 196, 238);
+    const uint16_t pulseCore = _lcd.color565(238, 252, 255);
+
+    // Recessed, squared-off window inside the existing 60 x 62 housing.
     _lcd.fillRect(cx - 26, cy - 27, 52, 54, _lcd.color565(90, 94, 100));
     _lcd.drawRect(cx - 26, cy - 27, 52, 54, _lcd.color565(42, 44, 48));
+    _lcd.fillRect(cx - 23, cy - 24, 46, 48, cavity);
+    _lcd.drawRect(cx - 23, cy - 24, 46, 48, cavityEdge);
+    _lcd.drawFastHLine(cx - 21, cy - 22, 42, _lcd.color565(42, 52, 64));
 
-    // Inverted-Y circuit geometry: two upper terminals + one lower terminal
-    const int ax = cx - 15, ay = cy - 16;  // Left terminal
-    const int bx = cx + 15, by = cy - 16;  // Right terminal
-    const int dx = cx,      dy = cy + 18;  // Bottom terminal
+    // Hand-stepped paths create a deliberate pixel-art silhouette.
+    const int8_t pathX[3][6] = {
+      {-15, -12,  -9,  -6,  -3, 0},
+      { 15,  12,   9,   6,   3, 0},
+      {  0,   0,   0,   0,   0, 0}
+    };
+    const int8_t pathY[3][6] = {
+      {-16, -13, -10,  -7,  -3, 0},
+      {-16, -13, -10,  -7,  -3, 0},
+      { 18,  14,  10,   6,   3, 0}
+    };
 
-    // Metallic tubes (gray, no internal black outline)
-    uint16_t tubeOuter = _lcd.color565(194, 198, 206);
-    drawThickLine(cx, cy, ax, ay, tubeOuter, 4);
-    drawThickLine(cx, cy, bx, by, tubeOuter, 4);
-    drawThickLine(cx, cy, dx, dy, tubeOuter, 4);
-
-    // Terminal endpoints with red accent dots
-    uint16_t baseGray = _lcd.color565(116, 118, 122);
-    _lcd.fillCircle(ax, ay, 5, baseGray);
-    _lcd.fillCircle(bx, by, 5, baseGray);
-    _lcd.fillCircle(dx, dy, 5, baseGray);
-    _lcd.fillCircle(ax, ay, 2, 0xF800);  // Red center
-    _lcd.fillCircle(bx, by, 2, 0xF800);
-    _lcd.fillCircle(dx, dy, 2, 0xF800);
-
-    // Energy pulse: bright blue glow effect (pulsing with animation)
-    uint16_t arc = scaleColor565(_lcd.color565(190, 230, 255), lum);
-    uint16_t coreGlow = scaleColor565(glow, lum);
-    drawThickLine(cx, cy, ax, ay, arc, 2);
-    drawThickLine(cx, cy, bx, by, arc, 2);
-    drawThickLine(cx, cy, dx, dy, arc, 2);
-
-    // Spark particles when active (active phase, high luminance)
-    if (active && lum > 90) {
-      _lcd.fillCircle((ax + cx) / 2, (ay + cy) / 2, 1, coreGlow);
-      _lcd.fillCircle((bx + cx) / 2, (by + cy) / 2, 1, coreGlow);
-      _lcd.fillCircle((dx + cx) / 2, (dy + cy) / 2, 1, coreGlow);
-      _lcd.fillCircle(cx - 4, cy - 2, 1, coreGlow);
-      _lcd.fillCircle(cx + 5, cy + 1, 1, coreGlow);
+    // Dark outline, steel sleeve and narrow blue-white strip define each tube.
+    for (uint8_t arm = 0; arm < 3; arm++) {
+      for (uint8_t point = 0; point < 6; point++) {
+        const int px = cx + pathX[arm][point];
+        const int py = cy + pathY[arm][point];
+        drawFluxPixel(px, py, 8, tubeDark);
+        drawFluxPixel(px, py, 6, steel);
+        drawFluxPixel(px, py, 4, tubeBase);
+        if (enabled) drawFluxPixel(px, py, 2, tubeLit);
+      }
     }
 
-    // Core nucleus with pulsing brightness
-    uint16_t core = scaleColor565(_cWhite, (uint8_t)(40 + (lum * 3 / 4)));
-    _lcd.fillCircle(cx, cy, 3, core);
+    // Red terminal caps stay visible while the tubes are idle.
+    for (uint8_t arm = 0; arm < 3; arm++) {
+      const int tx = cx + pathX[arm][0];
+      const int ty = cy + pathY[arm][0];
+      drawFluxPixel(tx, ty, 12, tubeDark);
+      drawFluxPixel(tx, ty, 10, steel);
+      drawFluxPixel(tx, ty, 6, _lcd.color565(112, 12, 18));
+      drawFluxPixel(tx, ty, 2, _lcd.color565(255, 72, 68));
+    }
+
+    // One arm at a time carries a bright pixel pulse from its terminal to the hub.
+    if (enabled) {
+      const uint8_t kCycleFrames = 40;
+      const uint8_t kTravelFrames = 20;
+      const uint8_t kCoreHoldFrames = 4;
+      const uint8_t armOffset[3] = {0, 13, 26};
+      for (uint8_t arm = 0; arm < 3; arm++) {
+        const uint8_t armFrame = (phase + armOffset[arm]) % kCycleFrames;
+        int8_t point = -1;
+        if (armFrame < kTravelFrames) {
+          point = (armFrame * 5) / (kTravelFrames - 1);
+        } else if (armFrame < kTravelFrames + kCoreHoldFrames) {
+          point = 5;
+        }
+
+        if (point >= 0) {
+          const int px = cx + pathX[arm][point];
+          const int py = cy + pathY[arm][point];
+          drawFluxPixel(px, py, 6, pulseHalo);
+          drawFluxPixel(px, py, 3, pulseCore);
+          if (point > 0) {
+            const int trailX = cx + pathX[arm][point - 1];
+            const int trailY = cy + pathY[arm][point - 1];
+            drawFluxPixel(trailX, trailY, 3, pulseHalo);
+          }
+        }
+      }
+    }
+
+    // The squared hub gives the three arms a distinct point of convergence.
+    drawFluxPixel(cx, cy, 10, tubeDark);
+    drawFluxPixel(cx, cy, 8, steel);
+    drawFluxPixel(cx, cy, 6, enabled ? pulseHalo : tubeBase);
+    drawFluxPixel(cx, cy, 2, enabled ? pulseCore : steelHi);
   }
 
   void handleControlButtons(uint16_t x, uint16_t y) {
@@ -533,7 +549,7 @@ class TimeCircuitPanel {
       drawAllRows(true);
       // Immediately refresh flux visual based on combined state
       bool eff = _panelLedsEnabled && _fluxEnabled;
-      drawFluxCell(160, 429, eff ? 120 : 16, eff, _cWhite);
+      drawFluxCell(160, 429, _fluxPhase, eff);
     }
   }
 
