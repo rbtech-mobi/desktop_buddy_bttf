@@ -178,35 +178,56 @@ class TimeCircuitPanel {
   }
 
   void drawRockerButton(const SmallButton& b) {
-    // Carcaca externa preta com sombra 3D.
-    _lcd.fillRoundRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, 4, _lcd.color565(8, 8, 10));
-    _lcd.drawRoundRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, 4, _lcd.color565(36, 36, 40));
-    _lcd.fillRoundRect(b.x, b.y, b.w, b.h, 3, _lcd.color565(18, 18, 20));
+    const int cx = b.x + b.w / 2;
+    const int pivotY = b.y + 26;
+    const uint16_t shadow = _lcd.color565(8, 9, 11);
+    const uint16_t housing = _lcd.color565(54, 58, 64);
+    const uint16_t steel = _lcd.color565(142, 148, 154);
+    const uint16_t steelHi = _lcd.color565(210, 216, 220);
+    const uint16_t well = _lcd.color565(17, 19, 22);
 
-    // Chave interna vermelha.
-    int ix = b.x + 3;
-    int iy = b.y + 3;
-    int iw = b.w - 6;
-    int ih = b.h - 6;
-    _lcd.fillRoundRect(ix, iy, iw, ih, 2, _lcd.color565(220, 16, 16));
+    // Recessed metal mounting plate with a machined rim.
+    _lcd.fillRoundRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, 5, shadow);
+    _lcd.drawRoundRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, 5, _lcd.color565(30, 32, 35));
+    _lcd.fillRoundRect(b.x, b.y, b.w, b.h, 5, housing);
+    _lcd.drawRoundRect(b.x, b.y, b.w, b.h, 5, steelHi);
+    _lcd.drawFastHLine(b.x + 5, b.y + 2, b.w - 10, steel);
+    _lcd.fillRoundRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6, 4, well);
 
-    // Estado ON/OFF com relevo (basculante).
-    if (b.on) {
-      _lcd.fillRect(ix + 1, iy + 1, iw - 2, ih / 2 - 1, _lcd.color565(248, 86, 86)); // topo alto
-      _lcd.fillRect(ix + 1, iy + ih / 2, iw - 2, ih / 2 - 1, _lcd.color565(180, 8, 8)); // base afundada
-      _lcd.drawFastHLine(ix + 1, iy + ih / 2, iw - 2, _lcd.color565(120, 0, 0));
-    } else {
-      _lcd.fillRect(ix + 1, iy + 1, iw - 2, ih / 2 - 1, _lcd.color565(180, 8, 8)); // topo afundado
-      _lcd.fillRect(ix + 1, iy + ih / 2, iw - 2, ih / 2 - 1, _lcd.color565(248, 86, 86)); // base alta
-      _lcd.drawFastHLine(ix + 1, iy + ih / 2, iw - 2, _lcd.color565(120, 0, 0));
+    // Four small slotted screws anchor the bezel to the panel.
+    const int screwX[4] = {b.x + 5, b.x + b.w - 6, b.x + 5, b.x + b.w - 6};
+    const int screwY[4] = {b.y + 6, b.y + 6, b.y + b.h - 7, b.y + b.h - 7};
+    for (uint8_t i = 0; i < 4; i++) {
+      _lcd.fillCircle(screwX[i], screwY[i], 2, _lcd.color565(34, 36, 40));
+      _lcd.drawFastHLine(screwX[i] - 1, screwY[i], 3, steel);
     }
 
-    _lcd.setTextColor(_cWhite, _lcd.color565(220, 16, 16));
-    _lcd.setTextSize(2);
-    _lcd.setCursor(ix + (iw / 2) - 3, iy + 3);
-    _lcd.print("I");
-    _lcd.setCursor(ix + (iw / 2) - 4, iy + (ih / 2) + 4);
-    _lcd.print("O");
+    // Engraved state legend sits above the lever's travel path.
+    _lcd.setTextSize(1);
+    _lcd.setTextColor(steelHi, well);
+    _lcd.setCursor(b.on ? cx - 5 : cx - 8, b.y + 4);
+    _lcd.print(b.on ? "ON" : "OFF");
+
+    // A tilted stainless-steel handle switches between the upper and lower stop.
+    const int tipX = cx + (b.on ? -4 : 4);
+    const int tipY = pivotY + (b.on ? -13 : 13);
+    for (int offset = -2; offset <= 2; offset++) {
+      _lcd.drawLine(cx + offset, pivotY + 1, tipX + offset, tipY + 1, shadow);
+    }
+    for (int offset = -1; offset <= 1; offset++) {
+      _lcd.drawLine(cx + offset, pivotY, tipX + offset, tipY, steel);
+    }
+    _lcd.drawLine(cx - 1, pivotY - 1, tipX - 1, tipY - 1, steelHi);
+
+    // Rounded handle knob, pivot washer and center pin add physical depth.
+    _lcd.fillCircle(tipX, tipY, 5, shadow);
+    _lcd.fillCircle(tipX, tipY, 4, steel);
+    _lcd.fillCircle(tipX - 1, tipY - 1, 2, steelHi);
+    _lcd.fillCircle(cx, pivotY, 7, shadow);
+    _lcd.drawCircle(cx, pivotY, 6, steelHi);
+    _lcd.fillCircle(cx, pivotY, 4, housing);
+    _lcd.fillCircle(cx, pivotY, 2, steel);
+    _lcd.fillCircle(cx, pivotY, 1, steelHi);
   }
 
   void drawBrushedSteelBackground() {
@@ -438,14 +459,8 @@ class TimeCircuitPanel {
     drawFluxCell(160, 429, _fluxPhase, effectiveFlux);
   }
 
-  void drawFluxPixel(int cx, int cy, uint8_t size, uint16_t color) {
-    // Square blocks keep the small graphic crisp instead of smoothing its edges.
-    const int offset = size / 2;
-    _lcd.fillRect(cx - offset, cy - offset, size, size, color);
-  }
-
   void drawFluxBeam(int x1, int y1, int x2, int y2, uint16_t color, uint8_t width) {
-    // Parallel raster lines make one continuous, deliberately pixelated tube.
+    // Parallel strokes build a continuous glass tube with a warm inner core.
     const int dx = abs(x2 - x1);
     const int dy = abs(y2 - y1);
     const int first = -(int)(width / 2);
@@ -462,35 +477,42 @@ class TimeCircuitPanel {
   }
 
   void drawFluxCell(int cx, int cy, uint8_t phase, bool enabled) {
-    // Pixel-art Flux Capacitor: three stepped tubes converge on one bright core.
-    const uint16_t cavity = _lcd.color565(8, 13, 21);
-    const uint16_t cavityEdge = _lcd.color565(4, 7, 12);
-    const uint16_t steel = _lcd.color565(92, 62, 42);
-    const uint16_t steelHi = _lcd.color565(237, 190, 124);
-    const uint16_t tubeDark = _lcd.color565(24, 10, 6);
-    const uint16_t tubeBase = _lcd.color565(172, 73, 24);
-    const uint16_t tubeLit = _lcd.color565(255, 231, 183);
-    const uint16_t pulseHalo = _lcd.color565(255, 153, 46);
-    const uint16_t pulseCore = _lcd.color565(255, 248, 224);
+    // Three glass tubes, brass mounts and warm energy pulses fit the existing cell.
+    const uint16_t cavity = _lcd.color565(8, 12, 18);
+    const uint16_t cavityEdge = _lcd.color565(4, 6, 10);
+    const uint16_t steel = _lcd.color565(104, 78, 49);
+    const uint16_t steelHi = _lcd.color565(222, 195, 148);
+    const uint16_t tubeDark = _lcd.color565(22, 12, 8);
+    const uint16_t tubeBase = _lcd.color565(174, 78, 26);
+    const uint16_t tubeGlow = enabled ? _lcd.color565(255, 160, 48) : _lcd.color565(82, 46, 24);
+    const uint16_t tubeCore = enabled ? _lcd.color565(255, 234, 195) : _lcd.color565(118, 79, 42);
+    const uint16_t pulseHalo = _lcd.color565(255, 151, 40);
+    const uint16_t pulseCore = _lcd.color565(255, 250, 230);
+    const uint16_t terminalRed = _lcd.color565(150, 20, 18);
+    const uint16_t terminalHi = _lcd.color565(255, 93, 63);
 
-    // Recessed, squared-off window inside the existing 60 x 62 housing.
+    // Recessed dark glass window inside the existing 60 x 62 housing.
     _lcd.fillRect(cx - 26, cy - 27, 52, 54, _lcd.color565(90, 94, 100));
     _lcd.drawRect(cx - 26, cy - 27, 52, 54, _lcd.color565(42, 44, 48));
-    _lcd.fillRect(cx - 23, cy - 24, 46, 48, cavity);
-    _lcd.drawRect(cx - 23, cy - 24, 46, 48, cavityEdge);
+    _lcd.fillRoundRect(cx - 23, cy - 24, 46, 48, 4, cavity);
+    _lcd.drawRoundRect(cx - 23, cy - 24, 46, 48, 4, cavityEdge);
 
     const int tipX[3] = {cx - 15, cx + 15, cx};
     const int tipY[3] = {cy - 16, cy - 16, cy + 18};
 
-    // Three continuous stepped tubes converge on the center hub.
+    // A restrained amber bloom sits behind the tubes; the glass remains legible.
+    if (enabled) _lcd.fillCircle(cx, cy, 10, _lcd.color565(42, 24, 13));
+
+    // Layered strokes form dark collars, brass edges and the lit glass core.
     for (uint8_t arm = 0; arm < 3; arm++) {
-      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeDark, 8);
-      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, steel, 6);
-      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeBase, 4);
-      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, enabled ? tubeLit : steelHi, 2);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeDark, 9);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, steel, 7);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeBase, 5);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeGlow, 3);
+      drawFluxBeam(tipX[arm], tipY[arm], cx, cy, tubeCore, 1);
     }
 
-    // One arm at a time carries a bright pixel pulse from its terminal to the hub.
+    // A rounded highlight travels along each arm toward the central junction.
     if (enabled) {
       const uint8_t kCycleFrames = 40;
       const uint8_t kTravelFrames = 20;
@@ -507,30 +529,31 @@ class TimeCircuitPanel {
           continue;
         }
 
-        drawFluxPixel(px, py, 4, pulseHalo);
-        drawFluxPixel(px, py, 2, pulseCore);
+        _lcd.fillCircle(px, py, 3, pulseHalo);
+        _lcd.fillCircle(px, py, 1, pulseCore);
         if (armFrame > 3 && armFrame < kTravelFrames) {
           const uint8_t trailFrame = armFrame - 3;
           const int trailX = tipX[arm] + ((cx - tipX[arm]) * trailFrame) / (kTravelFrames - 1);
           const int trailY = tipY[arm] + ((cy - tipY[arm]) * trailFrame) / (kTravelFrames - 1);
-          drawFluxPixel(trailX, trailY, 2, pulseHalo);
+          _lcd.fillCircle(trailX, trailY, 1, pulseHalo);
         }
       }
     }
 
-    // Red terminal caps stay visible while the tubes are idle or energized.
+    // Circular red terminal mounts, with a steel rim and reflected highlight.
     for (uint8_t arm = 0; arm < 3; arm++) {
-      drawFluxPixel(tipX[arm], tipY[arm], 10, tubeDark);
-      drawFluxPixel(tipX[arm], tipY[arm], 8, steel);
-      drawFluxPixel(tipX[arm], tipY[arm], 6, _lcd.color565(112, 12, 18));
-      drawFluxPixel(tipX[arm], tipY[arm], 2, _lcd.color565(255, 72, 68));
+      _lcd.fillCircle(tipX[arm], tipY[arm], 6, tubeDark);
+      _lcd.drawCircle(tipX[arm], tipY[arm], 5, steelHi);
+      _lcd.fillCircle(tipX[arm], tipY[arm], 4, steel);
+      _lcd.fillCircle(tipX[arm], tipY[arm], 3, terminalRed);
+      _lcd.fillCircle(tipX[arm] - 1, tipY[arm] - 1, 1, terminalHi);
     }
 
-    // The squared hub gives the three arms a distinct point of convergence.
-    drawFluxPixel(cx, cy, 10, tubeDark);
-    drawFluxPixel(cx, cy, 8, steel);
-    drawFluxPixel(cx, cy, 6, enabled ? pulseHalo : tubeBase);
-    drawFluxPixel(cx, cy, 2, enabled ? pulseCore : steelHi);
+    // Rounded central hub makes the three glass tubes visibly meet.
+    _lcd.fillCircle(cx, cy, 7, tubeDark);
+    _lcd.drawCircle(cx, cy, 6, steelHi);
+    _lcd.fillCircle(cx, cy, 4, enabled ? pulseHalo : tubeBase);
+    _lcd.fillCircle(cx - 1, cy - 1, 2, enabled ? pulseCore : steelHi);
   }
 
   void handleControlButtons(uint16_t x, uint16_t y) {
